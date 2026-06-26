@@ -1,0 +1,184 @@
+{
+  "app_name": "CalSync Admin",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A trustworthy, highly-structured calendar operations hub that feels like a polished Apple-native utility rather than a dry corporate dashboard.",
+  "color": {
+    "surface": "#FAFAFA",
+    "onSurface": "#111111",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A1A",
+    "surfaceTertiary": "#F0F0F0",
+    "onSurfaceTertiary": "#4A4A4A",
+    "surfaceInverse": "#1A1A1A",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#2E4F3B",
+    "brandPrimary": "#3A6B4D",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E8F2EC",
+    "onBrandSecondary": "#2E4F3B",
+    "brandTertiary": "#D1E6D9",
+    "onBrandTertiary": "#1D3627",
+    "success": "#287D3C",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D97706",
+    "onWarning": "#FFFFFF",
+    "error": "#DA291C",
+    "onError": "#FFFFFF",
+    "info": "#4A4A4A",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E5E5",
+    "borderStrong": "#CCCCCC",
+    "divider": "#F0F0F0",
+    "dark": {
+      "surface": "#0D0D0D",
+      "onSurface": "#F5F5F5",
+      "surfaceSecondary": "#1A1A1A",
+      "onSurfaceSecondary": "#E0E0E0",
+      "surfaceTertiary": "#262626",
+      "onSurfaceTertiary": "#A3A3A3",
+      "surfaceInverse": "#F5F5F5",
+      "onSurfaceInverse": "#0A0A0A",
+      "brand": "#4A8561",
+      "brandPrimary": "#5CA377",
+      "onBrandPrimary": "#0A0A0A",
+      "brandSecondary": "#1A3324",
+      "onBrandSecondary": "#86D1A2",
+      "brandTertiary": "#244733",
+      "onBrandTertiary": "#A2E8BD",
+      "success": "#34A853",
+      "onSuccess": "#0A0A0A",
+      "warning": "#F59E0B",
+      "onWarning": "#0A0A0A",
+      "error": "#EF4444",
+      "onError": "#0A0A0A",
+      "info": "#A3A3A3",
+      "onInfo": "#0A0A0A",
+      "border": "#262626",
+      "borderStrong": "#404040",
+      "divider": "#1A1A1A"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous Apple-native rhythms. Content is framed by negative space, not cramped. Forms and lists need comfortable vertical breathing room.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use glass for sticky bottom CTAs over scrolling forms.",
+      "Use glass for the bottom tab bar.",
+      "Apply glass to elevated sticky headers over history lists."
+    ],
+    "dont's": [
+      "Do not use glass on standard form inputs or data list rows.",
+      "Do not blur entire background containers."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Sign In",
+      "purpose": "OAuth entry point introducing the hub.",
+      "states": {
+        "loading": "Centered brand-colored spinner with 'Preparing workspace...'",
+        "empty": "N/A",
+        "error": "Standard alert or inline red banner above CTA."
+      },
+      "layout": "Hero image at the top occupying 40% of the screen. Dark scrim over the image. A strong display title centered. A solid sticky primary CTA at the bottom 1/3 (thumb zone) triggering Google Sign-In."
+    },
+    {
+      "name": "User Dashboard",
+      "purpose": "Shows the user's connection status and history of synced calendar events.",
+      "states": {
+        "loading": "Skeleton rows for the history list.",
+        "empty": "A clean illustration (desk calendar) with 'No events synced yet. Waiting for admin broadcast.' and a soft refresh CTA.",
+        "error": "Inline error banner 'Could not fetch history' with a Retry button."
+      },
+      "layout": "Scrollable view. Top section: A prominent card displaying 'Google Account Linked' status with a success dot. Below: A section header 'Sync History' leading into a list of received events and notifications. Each row has a tinted icon container and an event title + timestamp."
+    },
+    {
+      "name": "Admin Dashboard",
+      "purpose": "The command center for broadcasting events to all linked user calendars.",
+      "states": {
+        "loading": "Form skeletons.",
+        "empty": "N/A - Forms are always present.",
+        "error": "Form validation errors displayed directly under the respective inputs."
+      },
+      "layout": "Top section: A segmented control or simple toggle acting as the 'Role Switcher' (Admin/User). Below: Event Creation Form (Title, Description, Start/End pickers) using single-column inputs with labels above. The 'Broadcast to All Users' CTA is fixed at the bottom in a glass container. Below the form (or in a separate swipeable tab/sheet), a list of past broadcasts showing delivery stats (X/Y users synced)."
+    },
+    {
+      "name": "Profile",
+      "purpose": "Account settings, notification preferences, and diagnostics.",
+      "states": {
+        "loading": "Skeleton UI for user details.",
+        "empty": "N/A",
+        "error": "Error banner for diagnostic failures."
+      },
+      "layout": "Header with user's email/avatar. A list of settings rows (each with a tinted icon container) for FCM permission status, connection diagnostics, and a destructive row for Sign Out at the bottom."
+    }
+  ],
+  "images": {
+    "auth_hero": {
+      "url": "https://images.pexels.com/photos/13709181/pexels-photo-13709181.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Abstract smartphone calendar display"
+    },
+    "history_empty": {
+      "url": "https://images.pexels.com/photos/29509509/pexels-photo-29509509.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Minimalist desk calendar showing empty schedule"
+    }
+  },
+  "haptics": {
+    "events": {
+      "button_press": "impactLight",
+      "tab_change": "selection",
+      "broadcast_success": "notificationSuccess",
+      "toggle_role": "impactMedium"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the No Blue/Purple rule; the app uses a rich Moss Green (brand) palette to feel trustworthy but native.",
+    "Implement the sticky primary CTA for the Admin Dashboard 'Broadcast' button using a fixed absolute container at the bottom, layered with a glass effect so scrolling form content goes beneath it.",
+    "Max font weight is 500 across all UI elements. Hierarchy must be built using size, not weight.",
+    "Always apply a vertical gradient scrim (transparent to surfaceInverse) over the auth_hero image to ensure the title overlay is fully readable.",
+    "Do NOT use pure black background for dark mode; use the specified #0D0D0D token.",
+    "Ensure the role switcher is clearly positioned at the top of the Home screen and exclusively visible if the user is identified as an Admin.",
+    "Every setting row in the Profile screen must use a tinted icon container (brandTertiary bg) rather than bare icons."
+  ]
+}
