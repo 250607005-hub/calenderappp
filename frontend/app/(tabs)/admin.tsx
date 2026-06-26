@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -26,6 +27,16 @@ import { colors, radius, shadow, spacing, type } from '@/src/theme';
 type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly';
 type Visibility = 'default' | 'public' | 'private';
 type BusyStatus = 'busy' | 'free';
+
+const HOUR_OPTIONS: SelectOption<number>[] = Array.from({ length: 24 }, (_, h) => ({
+  value: h,
+  label: `${String(h).padStart(2, '0')}:00`,
+}));
+
+const MINUTE_OPTIONS: SelectOption<number>[] = Array.from({ length: 12 }, (_, i) => {
+  const m = i * 5;
+  return { value: m, label: `:${String(m).padStart(2, '0')}` };
+});
 
 const REMINDER_OPTIONS: SelectOption<number>[] = [
   { value: 0, label: 'No reminder', hint: 'Off' },
@@ -89,8 +100,38 @@ export default function AdminDashboard() {
 
   // Sheet visibility flags (one boolean each — single sheet open at a time is fine here)
   const [sheet, setSheet] = useState<
-    null | 'reminder' | 'recurrence' | 'visibility' | 'busy'
+    | null
+    | 'reminder'
+    | 'recurrence'
+    | 'visibility'
+    | 'busy'
+    | 'start-hour'
+    | 'start-minute'
+    | 'end-hour'
+    | 'end-minute'
   >(null);
+
+  const setHourOn = (which: 'start' | 'end', hour: number) => {
+    const d = new Date(which === 'start' ? start : end);
+    d.setHours(hour);
+    if (which === 'start') {
+      setStart(d);
+      if (d >= end) setEnd(new Date(d.getTime() + 60 * 60 * 1000));
+    } else {
+      setEnd(d);
+    }
+  };
+
+  const setMinuteOn = (which: 'start' | 'end', minute: number) => {
+    const d = new Date(which === 'start' ? start : end);
+    d.setMinutes(minute);
+    if (which === 'start') {
+      setStart(d);
+      if (d >= end) setEnd(new Date(d.getTime() + 60 * 60 * 1000));
+    } else {
+      setEnd(d);
+    }
+  };
 
   // Submission
   const [submitting, setSubmitting] = useState(false);
@@ -208,23 +249,43 @@ export default function AdminDashboard() {
               <View style={styles.iconLeft}>
                 <Ionicons name="time-outline" size={18} color={colors.onBrandTertiary} />
               </View>
-              <View style={{ flex: 1, gap: spacing.xs }}>
-                <Pressable
-                  testID="admin-start-picker"
-                  onPress={() => setPickerOpen('start')}
-                >
-                  <Text style={styles.dtLine}>
-                    Starts · <Text style={styles.dtValue}>{formatDt(start, allDay)}</Text>
-                  </Text>
-                </Pressable>
-                <Pressable
-                  testID="admin-end-picker"
-                  onPress={() => setPickerOpen('end')}
-                >
-                  <Text style={styles.dtLine}>
-                    Ends · <Text style={styles.dtValue}>{formatDt(end, allDay)}</Text>
-                  </Text>
-                </Pressable>
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                {/* STARTS */}
+                <View style={styles.timeRow}>
+                  <Text style={styles.timeLabel}>Starts</Text>
+                  <Pressable testID="admin-start-picker" onPress={() => setPickerOpen('start')} style={styles.dateChip}>
+                    <Text style={styles.dateChipText}>{format(start, 'MMM d, yyyy')}</Text>
+                  </Pressable>
+                  {!allDay && (
+                    <>
+                      <Pressable testID="admin-start-hour" onPress={() => setSheet('start-hour')} style={styles.timeChip}>
+                        <Text style={styles.timeChipText}>{String(start.getHours()).padStart(2, '0')}</Text>
+                      </Pressable>
+                      <Text style={styles.timeColon}>:</Text>
+                      <Pressable testID="admin-start-minute" onPress={() => setSheet('start-minute')} style={styles.timeChip}>
+                        <Text style={styles.timeChipText}>{String(start.getMinutes()).padStart(2, '0')}</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
+                {/* ENDS */}
+                <View style={styles.timeRow}>
+                  <Text style={styles.timeLabel}>Ends</Text>
+                  <Pressable testID="admin-end-picker" onPress={() => setPickerOpen('end')} style={styles.dateChip}>
+                    <Text style={styles.dateChipText}>{format(end, 'MMM d, yyyy')}</Text>
+                  </Pressable>
+                  {!allDay && (
+                    <>
+                      <Pressable testID="admin-end-hour" onPress={() => setSheet('end-hour')} style={styles.timeChip}>
+                        <Text style={styles.timeChipText}>{String(end.getHours()).padStart(2, '0')}</Text>
+                      </Pressable>
+                      <Text style={styles.timeColon}>:</Text>
+                      <Pressable testID="admin-end-minute" onPress={() => setSheet('end-minute')} style={styles.timeChip}>
+                        <Text style={styles.timeChipText}>{String(end.getMinutes()).padStart(2, '0')}</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </View>
               </View>
             </View>
             <Divider />
@@ -253,15 +314,20 @@ export default function AdminDashboard() {
             {pickerOpen && (
               <DateTimePicker
                 value={pickerOpen === 'start' ? start : end}
-                mode={allDay ? 'date' : 'datetime'}
+                mode="date"
                 onChange={(_, d) => {
                   if (Platform.OS !== 'ios') setPickerOpen(null);
                   if (!d) return;
                   if (pickerOpen === 'start') {
-                    setStart(d);
-                    if (d >= end) setEnd(new Date(d.getTime() + 60 * 60 * 1000));
+                    // Preserve current time-of-day on start
+                    const next = new Date(d);
+                    next.setHours(start.getHours(), start.getMinutes(), 0, 0);
+                    setStart(next);
+                    if (next >= end) setEnd(new Date(next.getTime() + 60 * 60 * 1000));
                   } else {
-                    setEnd(d);
+                    const next = new Date(d);
+                    next.setHours(end.getHours(), end.getMinutes(), 0, 0);
+                    setEnd(next);
                   }
                 }}
               />
@@ -502,29 +568,44 @@ export default function AdminDashboard() {
         onSelect={(v) => setBusy(v)}
         onClose={() => setSheet(null)}
       />
+      <SelectSheet
+        visible={sheet === 'start-hour'}
+        title="Start hour"
+        value={start.getHours()}
+        options={HOUR_OPTIONS}
+        onSelect={(v) => setHourOn('start', v)}
+        onClose={() => setSheet(null)}
+      />
+      <SelectSheet
+        visible={sheet === 'start-minute'}
+        title="Start minute"
+        value={start.getMinutes() - (start.getMinutes() % 5)}
+        options={MINUTE_OPTIONS}
+        onSelect={(v) => setMinuteOn('start', v)}
+        onClose={() => setSheet(null)}
+      />
+      <SelectSheet
+        visible={sheet === 'end-hour'}
+        title="End hour"
+        value={end.getHours()}
+        options={HOUR_OPTIONS}
+        onSelect={(v) => setHourOn('end', v)}
+        onClose={() => setSheet(null)}
+      />
+      <SelectSheet
+        visible={sheet === 'end-minute'}
+        title="End minute"
+        value={end.getMinutes() - (end.getMinutes() % 5)}
+        options={MINUTE_OPTIONS}
+        onSelect={(v) => setMinuteOn('end', v)}
+        onClose={() => setSheet(null)}
+      />
     </SafeAreaView>
   );
 }
 
 function Divider() {
   return <View style={styles.divider} />;
-}
-
-function formatDt(d: Date, allDay: boolean) {
-  if (allDay) {
-    return d.toLocaleDateString([], {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-  return d.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 const styles = StyleSheet.create({
@@ -580,6 +661,25 @@ const styles = StyleSheet.create({
   },
   dtLine: { fontSize: type.sm, color: colors.muted },
   dtValue: { color: colors.onSurface, fontWeight: '500', fontSize: type.base },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
+  timeLabel: { fontSize: type.sm, color: colors.muted, width: 48 },
+  dateChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: radius.md,
+  },
+  dateChipText: { color: colors.onSurface, fontWeight: '500', fontSize: type.base },
+  timeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.brandSecondary,
+    borderRadius: radius.md,
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  timeChipText: { color: colors.onBrandSecondary, fontWeight: '500', fontSize: type.base },
+  timeColon: { fontSize: type.lg, color: colors.muted, marginHorizontal: -spacing.xs },
   inlineInput: {
     flex: 1,
     fontSize: type.base,
