@@ -60,6 +60,7 @@ export default function CalendarScreen() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<CategoryKey | 'all'>('all');
 
   const loadEvents = useCallback(async () => {
     try {

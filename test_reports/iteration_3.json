@@ -1,0 +1,34 @@
+{
+  "summary": "Re-test of iteration-2 calendar.tsx ReferenceError fix. CONFIRMED FIXED. Calendar tab now loads cleanly for both admin (Sign in as Admin demo) and regular user (custom email -> onboarding -> tabs). All 9 filter chips (filter-chip-all + 8 category chips) render with correct testIDs, horizontal scroller does not wrap, chip taps switch active state. Year/Month/Week toggle works; tapping a day cell in Month drills into Week view. Admin Kategori row (admin-category-row) opens SelectSheet listing all 8 category options; selecting one updates the row label AND the POST body to /api/admin/broadcast-event uses the correct category key (verified e.g. selecting 'Burs' -> category:'scholarship'). No ReferenceError or red screen detected. Backend not re-tested as instructed.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "app/(tabs)/admin.tsx",
+        "issue": "TypeScript: `sheet` state union (lines 110-120) is still missing the 'category' literal even though setSheet('category') is called and <SelectSheet visible={sheet === 'category'} /> is rendered. Runtime works because Metro strips TS, but `tsc --noEmit` / strict CI will fail. Add 'category' to the union. Reference: /app/frontend/app/(tabs)/admin.tsx:110-120"
+      },
+      {
+        "component": "react-native style props",
+        "issue": "Console warnings: 'shadow*' style props are deprecated (use boxShadow); 'props.pointerEvents is deprecated (use style.pointerEvents)'. Non-blocking but should be migrated. Likely originating from /app/frontend/src/theme/* (shadow.card) and a Pressable using pointerEvents prop."
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional cleanup: add 'category' to the sheet state union type in admin.tsx so strict TS checks pass.",
+    "Optional cleanup: migrate shadow* style props to boxShadow and move pointerEvents into style to clear RN web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "calendar.tsx fix is correct and minimal (line 63). filteredEvents memo (line 124) correctly consumes filter; FilterChips wires value/onChange. No other regressions observed."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "skipped", "frontend": "100% (5/5 retest items pass)" },
+  "seed_data_creation": "Two mock broadcasts (TEST_cat_check, TEST_burs_send) were created during the admin Kategori submit verification. They live in the in-memory mock store and will disappear on backend restart.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 verified the calendar.tsx filter-useState fix in full: admin + regular user load Calendar without ReferenceError, all 8+'Hepsi' chips render and filter, Year/Month/Week + month->week drill-in work, admin Kategori sheet shows 8 options and the chosen category is sent to /api/admin/broadcast-event. Custom-email regular-user flow requires localStorage.clear() before the landing page if the previous run signed in as admin. Use_get_by_text('Use a custom email') then fill email input then click 'Continue with Google'; onboarding requires selecting at least one interest before 'Devam et' enables.",
+  "rca_of_issue": "Iteration-2 ReferenceError was a missing useState for `filter`/`setFilter` inside CalendarScreen. Main agent added `const [filter, setFilter] = useState<CategoryKey | 'all'>('all');` at calendar.tsx:63. Verified fixed."
+}
