@@ -1,0 +1,43 @@
+{
+  "summary": "Iter 4 verified all 3 follow-up changes end-to-end: (a) backend push-recipients fan-out excludes admin and only includes users whose interests match the broadcast category (incl. 'all' and empty interests). New pytest file /app/backend/tests/test_push_recipients.py exercises send_push code path with placeholder key (gracefully swallowed as 401). All 18 backend tests pass (9 existing CalSync, 6 interests/category, 3 new push-recipients). (b) Frontend edit-interests flow works: Profile shows testID='edit-interests-button' for non-admin only, label 'İlgi alanlarım' + hint count; tapping navigates to /onboarding-interests in EDIT mode (title 'İlgi alanlarını güncelle', CTA 'Kaydet') with current interests preselected (visually confirmed Staj/scholarship chips active + verified via PUT body sequence). Deselecting+adding then Kaydet sends PUT /api/auth/interests with new list and router.back() returns to Profile. AuthGate no longer bounces users with interests away from /onboarding-interests. Admin Profile correctly omits the row. (c) Calendar empty-state banner testID='calendar-empty-filter' renders ONLY when filter !== 'all' AND filteredEvents.length === 0 AND events.length > 0; banner text matches spec exactly ('“Mentorluk” kategorisinde etkinlik yok. Filtreyi kaldırmak için “Hepsi”ye dokun.'); Month grid still renders alongside banner; banner correctly hides when filter switches to a category with events or to 'Hepsi'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "react-native-web style props",
+        "issue": "Console warnings persist (carried over from iter 3): 'shadow*' style props are deprecated (use boxShadow) and 'props.pointerEvents is deprecated (use style.pointerEvents)'. Non-blocking but should be migrated. Likely sources: /app/frontend/src/theme/* (shadow.card used in onboarding-interests.tsx:187 and elsewhere) and a Pressable with pointerEvents prop."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_push_recipients.py (NEW)",
+    "/app/backend/tests/test_calsync_api.py",
+    "/app/backend/tests/test_interests_and_category.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [
+    "Optional: migrate shadow* style props to boxShadow and move pointerEvents into style to clear RN-web deprecation warnings."
+  ],
+  "critical_code_review_comments": [
+    "server.py:691-704 fan-out filter is correct (matches users whose interests contain the broadcast category OR 'all' OR are empty); admin excluded by the {id: {$ne: admin.id}} query; push recipients list at line 754 is derived strictly from this filtered targets list — admin cannot leak in.",
+    "onboarding-interests.tsx:26-29 correctly seeds Set<InterestKey> from user.interests for EDIT mode and submit() at line 63 routes back via router.back() in edit mode instead of replacing to /(tabs).",
+    "_layout.tsx:51-57 AuthGate only re-routes to /(tabs) when user is inAuthGroup (sign-in screen); inOnboarding users with non-empty interests are left alone — fix is correct and minimal.",
+    "calendar.tsx:158 empty-state condition correctly gated by `!loading && filter !== 'all' && filteredEvents.length === 0 && events.length > 0` — banner does NOT show on first-load empty state or when grouping by 'Hepsi'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_push_recipients.py (created)",
+    "/app/test_reports/pytest/iter4.xml (generated)"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 pytest)",
+    "frontend": "100% (all 8 review items verified: push-recipients backend, profile edit row, edit-mode title/CTA, preselection, PUT call + router.back(), AuthGate non-bounce, calendar empty banner positive + negative, admin role hides row)"
+  },
+  "seed_data_creation": "Test broadcasts (TEST_push_recipients_*, TEST_empty_fanout_*, TEST_nomatch_*, TEST_banner_intern_*) and disposable users (TEST_*, qa_user_*, qa_banner_*) were created in mock mode. They live in MongoDB and are not cleaned up; safe to ignore (TEST_-prefixed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 3 follow-up tasks pass: push-recipients filtering (admin excluded, only matching interests), profile edit-interests row + edit-mode onboarding + AuthGate non-bounce, calendar empty-state banner. Banner positive case requires events to exist for the user — exercised by logging in as a user with ['internship'] interest, having admin broadcast an internship event, then filtering to mentorship (banner appears with exact spec text). The Emergent push relay returns 401 (placeholder key) and backend logs it as 'push trigger non-ok: 401' — non-blocking, expected in this environment. Sign-in helper: localStorage.clear() before reload; 'Use a custom email' → fill email → 'Continue with Google'. Users with non-empty interests bypass onboarding and land on /(tabs).",
+  "rca_of_issue": "N/A — verifying feature additions, no bug RCA needed. Note: send_push uses EMERGENT_PUSH_KEY=placeholder → upstream returns 401 → backend swallows the error and logs warning; the recipient-list correctness is verified via the synchronous fan-out side effects (recipients_count, /me/events presence per user)."
+}

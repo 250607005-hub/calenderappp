@@ -154,6 +154,17 @@ export default function CalendarScreen() {
       {/* Filter chips — single horizontal scroller, sticky chrome */}
       <FilterChips value={filter} onChange={setFilter} />
 
+      {/* Empty-state hint when filter yields nothing */}
+      {!loading && filter !== 'all' && filteredEvents.length === 0 && events.length > 0 && (
+        <View testID="calendar-empty-filter" style={styles.emptyHint}>
+          <Ionicons name="filter-outline" size={16} color={colors.muted} />
+          <Text style={styles.emptyHintText}>
+            “{categoryLabel(filter as CategoryKey)}” kategorisinde etkinlik yok. Filtreyi
+            kaldırmak için “Hepsi”ye dokun.
+          </Text>
+        </View>
+      )}
+
       {mode === 'year' && (
         <YearView
           cursor={cursor}
@@ -835,4 +846,16 @@ const styles = StyleSheet.create({
   },
   chipText: { color: colors.muted, fontSize: type.sm, fontWeight: '500' },
   chipTextActive: { color: colors.brand },
+  emptyHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: radius.md,
+  },
+  emptyHintText: { fontSize: type.sm, color: colors.onSurfaceTertiary, flex: 1, lineHeight: 18 },
 });

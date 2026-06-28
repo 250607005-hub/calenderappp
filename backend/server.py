@@ -383,6 +383,25 @@ async def send_push(recipients: list[str], data: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Category labels (server-side mirror of frontend src/lib/categories.ts)
+# ---------------------------------------------------------------------------
+CATEGORY_LABELS: dict[str, str] = {
+    "internship": "Staj",
+    "job": "İş",
+    "self_improvement": "Kendini geliştirmek",
+    "opportunities": "Yeni imkanlar",
+    "education": "Eğitim & Kurs",
+    "scholarship": "Burs",
+    "mentorship": "Mentorluk",
+    "networking": "Etkinlik",
+}
+
+
+def categoryLabelServer(key: str) -> str:  # noqa: N802
+    return CATEGORY_LABELS.get(key, key)
+
+
+# ---------------------------------------------------------------------------
 # Routes — health
 # ---------------------------------------------------------------------------
 @api.get("/")
@@ -729,13 +748,14 @@ async def admin_broadcast(
     }
     await events_col.insert_one(record)
 
-    # 4. Push notification fan-out (skipped if admin opted out)
+    # 4. Push notification fan-out (only to users whose interests match — same
+    #    set we just synced to). Admins do not receive their own broadcast push.
     if body.send_push:
-        recipients = [admin["id"]] + [t["id"] for t in targets]
+        recipients = [t["id"] for t in targets]
         await send_push(
             recipients=recipients,
             data={
-                "title": f"New event: {body.title}",
+                "title": f"{categoryLabelServer(body.category)} · {body.title}",
                 "message": body.description[:120]
                 or "An admin broadcast has been added to your calendar.",
             },

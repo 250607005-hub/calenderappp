@@ -82,6 +82,31 @@ export default function Profile() {
 
         <Text style={styles.sectionLabel}>Actions</Text>
         <View style={styles.card}>
+          {!user?.is_admin && (
+            <>
+              <Pressable
+                testID="edit-interests-button"
+                onPress={() => router.push('/onboarding-interests')}
+                style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}
+              >
+                <View style={styles.actionIcon}>
+                  <Ionicons name="compass-outline" size={18} color={colors.onBrandTertiary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.actionLabel}>İlgi alanlarım</Text>
+                  <Text style={styles.actionHint}>
+                    {(user?.interests ?? []).length === 0
+                      ? 'Henüz seçilmedi'
+                      : (user?.interests ?? []).includes('all')
+                        ? 'Hepsi'
+                        : `${(user?.interests ?? []).length} seçili`}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+              </Pressable>
+              <Divider />
+            </>
+          )}
           {user?.google_connected && (
             <>
               <Pressable
@@ -201,6 +226,7 @@ const styles = StyleSheet.create({
   },
   action: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, gap: spacing.md },
   actionLabel: { fontSize: type.base, color: colors.onSurface, flex: 1, fontWeight: '500' },
+  actionHint: { fontSize: type.sm, color: colors.muted, marginTop: 2 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: spacing.lg + 32 + spacing.md },
   footer: { textAlign: 'center', color: colors.muted, fontSize: type.sm, marginTop: spacing['2xl'] },
 });

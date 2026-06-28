@@ -22,8 +22,11 @@ import { colors, radius, shadow, spacing, type } from '@/src/theme';
 
 export default function OnboardingInterests() {
   const router = useRouter();
-  const { refresh } = useAuth();
-  const [selected, setSelected] = useState<Set<InterestKey>>(new Set());
+  const { user, refresh } = useAuth();
+  const isEdit = !!(user?.interests && user.interests.length > 0);
+  const [selected, setSelected] = useState<Set<InterestKey>>(
+    () => new Set((user?.interests ?? []) as InterestKey[])
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +60,11 @@ export default function OnboardingInterests() {
     try {
       await auth.setInterests(Array.from(selected));
       await refresh();
-      router.replace('/(tabs)');
+      if (isEdit && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kaydedilemedi');
     } finally {
@@ -73,8 +80,10 @@ export default function OnboardingInterests() {
             <Ionicons name="compass" size={28} color={colors.onBrandPrimary} />
           </View>
         </View>
-        <Text style={styles.eyebrow}>Bir kerelik soru</Text>
-        <Text style={styles.title}>Neyle ilgileniyorsun?</Text>
+        <Text style={styles.eyebrow}>{isEdit ? 'İlgi alanlarım' : 'Bir kerelik soru'}</Text>
+        <Text style={styles.title}>
+          {isEdit ? 'İlgi alanlarını güncelle' : 'Neyle ilgileniyorsun?'}
+        </Text>
         <Text style={styles.subtitle}>
           Seçtiklerine göre takvimine yalnızca sana uygun ilanlar düşecek. Birden fazla
           seçebilirsin.
@@ -153,7 +162,7 @@ export default function OnboardingInterests() {
           ) : (
             <>
               <Text style={styles.ctaText}>
-                Devam et{selected.size > 0 ? `  ·  ${selected.size}` : ''}
+                {isEdit ? 'Kaydet' : 'Devam et'}{selected.size > 0 ? `  ·  ${selected.size}` : ''}
               </Text>
               <Ionicons name="arrow-forward" size={18} color={colors.onBrandPrimary} />
             </>

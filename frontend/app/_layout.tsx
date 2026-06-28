@@ -50,7 +50,9 @@ function AuthGate() {
     const needsInterests = !user.is_admin && (!user.interests || user.interests.length === 0);
     if (needsInterests && !inOnboarding) {
       router.replace('/onboarding-interests');
-    } else if (!needsInterests && (inAuthGroup || inOnboarding)) {
+    } else if (!needsInterests && inAuthGroup) {
+      // Users who already have interests can freely visit /onboarding-interests
+      // from Profile → "İlgi alanlarım" without being bounced away.
       router.replace('/(tabs)');
     }
   }, [user, loading, segments, router]);
