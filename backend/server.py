@@ -595,6 +595,13 @@ async def register_push(body: RegisterPushBody) -> dict[str, str]:
 @api.get("/me/events", response_model=list[UserEventSync])
 async def my_synced_events(user: dict[str, Any] = Depends(current_user)) -> list[UserEventSync]:
     rows = await syncs_col.find({"user_id": user["id"]}, {"_id": 0}).sort("delivered_at", -1).to_list(200)
+    # Filter by the user's CURRENT interests so that historic syncs from
+    # categories the user no longer cares about disappear from the UI.
+    # Empty interests OR 'all' => see-everything.
+    interests = set(user.get("interests") or [])
+    see_all = not interests or "all" in interests
+    if not see_all:
+        rows = [r for r in rows if r.get("category", "opportunities") in interests]
     out: list[UserEventSync] = []
     for r in rows:
         out.append(

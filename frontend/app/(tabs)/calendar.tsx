@@ -269,9 +269,9 @@ function ModeToggle({
   onChange: (m: ViewMode) => void;
 }) {
   const options: { key: ViewMode; label: string }[] = [
-    { key: 'year', label: 'Year' },
-    { key: 'month', label: 'Month' },
-    { key: 'week', label: 'Week' },
+    { key: 'year', label: 'Yıl' },
+    { key: 'month', label: 'Ay' },
+    { key: 'week', label: 'Hafta' },
   ];
   return (
     <View style={styles.toggleWrap}>
@@ -310,17 +310,29 @@ function YearView({
   const months = Array.from({ length: 12 }, (_, i) => addMonths(yearStart, i));
   return (
     <ScrollView contentContainerStyle={styles.yearGrid} showsVerticalScrollIndicator={false}>
-      {months.map((m) => (
-        <Pressable
-          key={m.toISOString()}
-          testID={`calendar-year-month-${format(m, 'MM')}`}
-          onPress={() => onPickMonth(m)}
-          style={styles.yearCell}
-        >
-          <Text style={styles.yearMonthLabel}>{format(m, 'MMM')}</Text>
-          <MiniMonth month={m} events={events} />
-        </Pressable>
-      ))}
+      {months.map((m) => {
+        const monthEvents = events.filter(
+          (e) => e.start.getFullYear() === m.getFullYear() && e.start.getMonth() === m.getMonth()
+        );
+        return (
+          <Pressable
+            key={m.toISOString()}
+            testID={`calendar-year-month-${format(m, 'MM')}`}
+            onPress={() => onPickMonth(m)}
+            style={styles.yearCell}
+          >
+            <View style={styles.yearCellHeader}>
+              <Text style={styles.yearMonthLabel}>{format(m, 'MMM')}</Text>
+              {monthEvents.length > 0 && (
+                <View style={styles.yearCountBadge}>
+                  <Text style={styles.yearCountText}>{monthEvents.length}</Text>
+                </View>
+              )}
+            </View>
+            <MiniMonth month={m} events={events} />
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -668,9 +680,25 @@ const styles = StyleSheet.create({
     fontSize: type.sm,
     fontWeight: '500',
     color: colors.brand,
-    marginBottom: spacing.xs,
     textAlign: 'center',
   },
+  yearCellHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  yearCountBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearCountText: { color: colors.onBrandPrimary, fontSize: 10, fontWeight: '600' },
   miniGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   miniCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
   miniDay: { fontSize: 9, color: colors.onSurface },
