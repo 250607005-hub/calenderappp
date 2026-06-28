@@ -113,6 +113,7 @@ export default function AdminDashboard() {
     | 'recurrence'
     | 'visibility'
     | 'busy'
+    | 'category'
     | 'start-hour'
     | 'start-minute'
     | 'end-hour'
