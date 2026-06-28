@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -39,6 +40,7 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncingEventId, setSyncingEventId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -67,6 +69,49 @@ export default function UserDashboard() {
   };
 
   const linked = !!user?.google_connected;
+
+  const syncToMyCalendar = async (event: UserEventSync) => {
+    if (!linked) {
+      Alert.alert(
+        'Google Calendar Not Connected',
+        'Please sign in again with Google to enable calendar sync.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    setSyncingEventId(event.id);
+    try {
+      const result = await userApi.syncEvent({
+        title: event.title,
+        description: event.description,
+        start_time: event.start_time,
+        end_time: event.end_time,
+        category: event.category,
+        reminder_minutes: 10,
+      });
+
+      if (result.status === 'synced') {
+        Alert.alert(
+          'Event Added!',
+          `"${event.title}" has been added to your Google Calendar.`,
+          [{ text: 'OK', onPress: () => void load() }]
+        );
+      } else if (result.status === 'mock') {
+        Alert.alert(
+          'Demo Mode',
+          'Google Calendar sync is running in demo mode. Configure GOOGLE_CLIENT_ID to enable real sync.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Sync Failed', result.error || 'Could not sync event to calendar.');
+      }
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to sync event');
+    } finally {
+      setSyncingEventId(null);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root} edges={['top']} testID="user-dashboard-screen">
@@ -140,10 +185,33 @@ export default function UserDashboard() {
                 </Text>
               ) : null}
             </View>
-            <View style={[styles.tag, tagStyle(item.status)]}>
-              <Text style={[styles.tagText, { color: tagTextColor(item.status) }]}>
-                {item.status}
-              </Text>
+            <View style={styles.eventActions}>
+              <View style={[styles.tag, tagStyle(item.status)]}>
+                <Text style={[styles.tagText, { color: tagTextColor(item.status) }]}>
+                  {item.status}
+                </Text>
+              </View>
+              {item.status === 'mock' && (
+                <Pressable
+                  testID={`sync-event-${item.id}`}
+                  style={({ pressed }) => [
+                    styles.syncBtn,
+                    syncingEventId === item.id && { opacity: 0.5 },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => syncToMyCalendar(item)}
+                  disabled={syncingEventId === item.id}
+                >
+                  {syncingEventId === item.id ? (
+                    <ActivityIndicator size="small" color={colors.onBrandPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="add-circle-outline" size={16} color={colors.onBrandPrimary} />
+                      <Text style={styles.syncBtnText}>Add to Calendar</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
             </View>
           </View>
         )}
@@ -263,12 +331,27 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: type.base, fontWeight: '500', color: colors.onSurface },
   eventTime: { fontSize: type.sm, color: colors.muted, marginTop: 2 },
   eventDesc: { fontSize: type.sm, color: colors.onSurfaceTertiary, marginTop: 4 },
+  eventActions: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
   tag: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
   tagText: { fontSize: 10, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5 },
+  syncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+  },
+  syncBtnText: { color: colors.onBrandPrimary, fontSize: type.sm - 1, fontWeight: '500' },
   empty: { alignItems: 'center', paddingVertical: spacing['3xl'], gap: spacing.sm },
   emptyTitle: { fontSize: type.lg, fontWeight: '500', color: colors.onSurface, marginTop: spacing.sm },
   emptySub: { fontSize: type.sm, color: colors.muted, textAlign: 'center', paddingHorizontal: spacing.xl },

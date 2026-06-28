@@ -150,6 +150,20 @@ export const auth = {
 
 export const userApi = {
   myEvents: () => api<UserEventSync[]>('/api/me/events'),
+  syncEvent: (event: {
+    title: string;
+    description: string;
+    start_time: string;
+    end_time: string;
+    location?: string | null;
+    category?: string;
+    all_day?: boolean;
+    reminder_minutes?: number;
+  }) =>
+    api<{ id: string; google_event_id: string | null; status: string; error: string | null }>(
+      '/api/me/sync-event',
+      { method: 'POST', body: event }
+    ),
 };
 
 export const adminApi = {

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { auth } from '@/src/lib/api';
+import { useGoogleAuthServerCode } from '@/src/lib/google-auth';
 import { useAuth } from '@/src/lib/auth-context';
 import { registerForPush } from '@/src/lib/push';
 import { colors, radius, shadow, spacing, type } from '@/src/theme';
@@ -27,11 +28,49 @@ const HERO =
 export default function SignIn() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const { isReady, signIn: googleSignIn, isConfigured } = useGoogleAuthServerCode();
+
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showEmail, setShowEmail] = useState(false);
+
+  // Handle real Google Sign-In
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!isConfigured) {
+        // Fallback to mock mode
+        const targetEmail = email.trim() || 'user@calsync.app';
+        const targetName = name.trim() || 'Demo User';
+        const res = await auth.googleMobile(undefined, targetEmail, targetName);
+        await signIn(res.token, res.user);
+        void registerForPush(res.user.id);
+        router.replace('/(tabs)');
+        return;
+      }
+
+      const result = await googleSignIn();
+
+      if (result.type === 'success' && result.serverAuthCode) {
+        // Send server auth code to backend
+        const res = await auth.googleMobile(result.serverAuthCode);
+        await signIn(res.token, res.user);
+        void registerForPush(res.user.id);
+        router.replace('/(tabs)');
+      } else if (result.type === 'cancel') {
+        setError('Sign in cancelled');
+      } else {
+        setError(result.error || 'Sign in failed');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Sign in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const doSignIn = async (asAdmin: boolean) => {
     setLoading(true);
@@ -114,15 +153,17 @@ export default function SignIn() {
               <Pressable
                 testID="sign-in-google-button"
                 style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }]}
-                onPress={() => doSignIn(false)}
-                disabled={loading}
+                onPress={handleGoogleSignIn}
+                disabled={loading || !isReady}
               >
                 {loading ? (
                   <ActivityIndicator color={colors.onBrandPrimary} />
                 ) : (
                   <>
                     <Ionicons name="logo-google" size={18} color={colors.onBrandPrimary} />
-                    <Text style={styles.primaryBtnText}>Continue with Google</Text>
+                    <Text style={styles.primaryBtnText}>
+                      {isConfigured ? 'Continue with Google' : 'Continue with Google (Demo)'}
+                    </Text>
                   </>
                 )}
               </Pressable>
@@ -158,8 +199,9 @@ export default function SignIn() {
               )}
 
               <Text style={styles.fineprint}>
-                Demo mode: Google OAuth is mocked until backend keys are configured.
-                Admin = the email matching ADMIN_EMAIL on the server.
+                {isConfigured
+                  ? 'Sign in with Google to sync events to your calendar.'
+                  : 'Demo mode: Google OAuth is mocked until backend keys are configured.'}
               </Text>
             </View>
           </ScrollView>

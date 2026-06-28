@@ -592,6 +592,25 @@ async def register_push(body: RegisterPushBody) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Routes — User Dashboard
 # ---------------------------------------------------------------------------
+class SyncEventBody(BaseModel):
+    """User-initiated sync to their own Google Calendar."""
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    start_time: datetime
+    end_time: datetime
+    location: str | None = None
+    category: str = "opportunities"
+    all_day: bool = False
+    reminder_minutes: int = 10
+
+
+class SyncEventResult(BaseModel):
+    id: str
+    google_event_id: str | None
+    status: str
+    error: str | None
+
+
 @api.get("/me/events", response_model=list[UserEventSync])
 async def my_synced_events(user: dict[str, Any] = Depends(current_user)) -> list[UserEventSync]:
     rows = await syncs_col.find({"user_id": user["id"]}, {"_id": 0}).sort("delivered_at", -1).to_list(200)
@@ -620,6 +639,116 @@ async def my_synced_events(user: dict[str, Any] = Depends(current_user)) -> list
             )
         )
     return out
+
+
+@api.post("/me/sync-event", response_model=SyncEventResult)
+async def sync_event_to_my_calendar(
+    body: SyncEventBody, user: dict[str, Any] = Depends(current_user)
+) -> SyncEventResult:
+    """Sync a single event to the user's own Google Calendar.
+
+    This is the 'Connect to My Calendar' feature - users can add any event
+    to their personal Google Calendar with one tap.
+    """
+    if body.end_time <= body.start_time:
+        raise HTTPException(400, "end_time must be after start_time")
+
+    sync_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    refresh_token = user.get("google_refresh_token")
+
+    # Check if user has connected Google Calendar
+    if GOOGLE_MOCK_MODE or not refresh_token or str(refresh_token).startswith("mock-"):
+        # Mock mode - just record the sync
+        row = {
+            "id": sync_id,
+            "user_id": user["id"],
+            "event_id": sync_id,
+            "title": body.title,
+            "description": body.description,
+            "category": body.category,
+            "start_time": body.start_time,
+            "end_time": body.end_time,
+            "delivered_at": now,
+            "status": "mock",
+            "google_event_id": f"mock-evt-{uuid.uuid4()}",
+        }
+        await syncs_col.insert_one(row)
+        return SyncEventResult(
+            id=sync_id,
+            google_event_id=row["google_event_id"],
+            status="mock",
+            error=None,
+        )
+
+    try:
+        # Refresh access token and insert event
+        access_token = await google_refresh_access_token(refresh_token)
+
+        # Build event payload for Google Calendar
+        event_payload = google_event_payload(BroadcastBody(
+            title=body.title,
+            description=body.description,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            location=body.location,
+            category=body.category,
+            all_day=body.all_day,
+            reminder_minutes=body.reminder_minutes,
+        ))
+
+        gevent = await google_insert_event(access_token, event_payload)
+
+        # Update user's access token
+        await users_col.update_one(
+            {"id": user["id"]},
+            {"$set": {"google_access_token": access_token, "token_expiry": now + timedelta(hours=1)}},
+        )
+
+        # Record the sync
+        row = {
+            "id": sync_id,
+            "user_id": user["id"],
+            "event_id": sync_id,
+            "title": body.title,
+            "description": body.description,
+            "category": body.category,
+            "start_time": body.start_time,
+            "end_time": body.end_time,
+            "delivered_at": now,
+            "status": "synced",
+            "google_event_id": gevent.get("id"),
+        }
+        await syncs_col.insert_one(row)
+
+        return SyncEventResult(
+            id=sync_id,
+            google_event_id=gevent.get("id"),
+            status="synced",
+            error=None,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("user sync failed for %s: %s", user["email"], e)
+        row = {
+            "id": sync_id,
+            "user_id": user["id"],
+            "event_id": sync_id,
+            "title": body.title,
+            "description": body.description,
+            "category": body.category,
+            "start_time": body.start_time,
+            "end_time": body.end_time,
+            "delivered_at": now,
+            "status": "failed",
+            "error": str(e)[:300],
+        }
+        await syncs_col.insert_one(row)
+        return SyncEventResult(
+            id=sync_id,
+            google_event_id=None,
+            status="failed",
+            error=str(e)[:300],
+        )
 
 
 # ---------------------------------------------------------------------------

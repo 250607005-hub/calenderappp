@@ -1,16 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { auth as authApi } from '@/src/lib/api';
 import { useAuth } from '@/src/lib/auth-context';
+import { useGoogleAuthServerCode } from '@/src/lib/google-auth';
 import { colors, radius, shadow, spacing, type } from '@/src/theme';
 
 export default function Profile() {
   const router = useRouter();
   const { user, signOut, refresh } = useAuth();
+  const { signIn: googleSignIn, isConfigured: googleConfigured } = useGoogleAuthServerCode();
   const [permission, setPermission] = useState<string>('unknown');
   const [busy, setBusy] = useState(false);
 
@@ -29,14 +31,57 @@ export default function Profile() {
     void checkPermission();
   }, [checkPermission]);
 
-  const disconnectGoogle = async () => {
+  const connectGoogle = async () => {
+    if (!googleConfigured) {
+      Alert.alert(
+        'Demo Mode',
+        'Google OAuth is not configured. Set EXPO_PUBLIC_GOOGLE_CLIENT_ID in .env to enable real Google Calendar sync.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setBusy(true);
     try {
-      await authApi.disconnectGoogle();
-      await refresh();
+      const result = await googleSignIn();
+      if (result.type === 'success' && result.serverAuthCode) {
+        // Send to backend to exchange for tokens
+        await authApi.googleMobile(result.serverAuthCode);
+        await refresh();
+        Alert.alert('Success', 'Your Google Calendar is now connected!');
+      } else if (result.type === 'cancel') {
+        // User cancelled - no alert needed
+      } else {
+        Alert.alert('Error', result.error || 'Failed to connect Google account');
+      }
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to connect Google');
     } finally {
       setBusy(false);
     }
+  };
+
+  const disconnectGoogle = async () => {
+    Alert.alert(
+      'Disconnect Google Calendar?',
+      'You will no longer receive automatic calendar sync for broadcasts.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await authApi.disconnectGoogle();
+              await refresh();
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const doSignOut = async () => {
@@ -66,9 +111,44 @@ export default function Profile() {
           <Row
             icon="link-outline"
             label="Google Calendar"
-            value={user?.google_connected ? 'Linked' : 'Not linked'}
+            value={user?.google_connected ? 'Connected' : 'Not Connected'}
             tint={user?.google_connected ? colors.success : colors.warning}
           />
+          {!user?.google_connected && (
+            <>
+              <Divider />
+              <Pressable
+                testID="connect-google-button"
+                onPress={connectGoogle}
+                disabled={busy}
+                style={({ pressed }) => [styles.connectBtn, pressed && { opacity: 0.6 }]}
+              >
+                <Ionicons name="logo-google" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.connectBtnText}>
+                  {googleConfigured ? 'Connect Google Calendar' : 'Connect Google (Demo)'}
+                </Text>
+              </Pressable>
+            </>
+          )}
+          {user?.google_connected && (
+            <>
+              <Divider />
+              <Pressable
+                testID="disconnect-google-button"
+                onPress={disconnectGoogle}
+                disabled={busy}
+                style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#FAD5D2' }]}>
+                  <Ionicons name="unlink-outline" size={18} color={colors.error} />
+                </View>
+                <Text style={[styles.actionLabel, { color: colors.error }]}>
+                  Disconnect Google Calendar
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+              </Pressable>
+            </>
+          )}
           <Divider />
           <Row
             icon="notifications-outline"
@@ -102,23 +182,6 @@ export default function Profile() {
                         : `${(user?.interests ?? []).length} seçili`}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-              </Pressable>
-              <Divider />
-            </>
-          )}
-          {user?.google_connected && (
-            <>
-              <Pressable
-                testID="disconnect-google-button"
-                onPress={disconnectGoogle}
-                disabled={busy}
-                style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}
-              >
-                <View style={styles.actionIcon}>
-                  <Ionicons name="unlink-outline" size={18} color={colors.onBrandTertiary} />
-                </View>
-                <Text style={styles.actionLabel}>Disconnect Google Calendar</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.muted} />
               </Pressable>
               <Divider />
@@ -228,5 +291,18 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: type.base, color: colors.onSurface, flex: 1, fontWeight: '500' },
   actionHint: { fontSize: type.sm, color: colors.muted, marginTop: 2 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: spacing.lg + 32 + spacing.md },
+  connectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brand,
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.md,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    minHeight: 48,
+  },
+  connectBtnText: { color: colors.onBrandPrimary, fontSize: type.base, fontWeight: '500' },
   footer: { textAlign: 'center', color: colors.muted, fontSize: type.sm, marginTop: spacing['2xl'] },
 });
