@@ -127,7 +127,25 @@ class PublicUser(BaseModel):
     name: str
     is_admin: bool
     google_connected: bool
+    interests: list[str] = Field(default_factory=list)
     created_at: datetime
+
+
+class InterestsBody(BaseModel):
+    interests: list[str]
+
+
+# Allowed broadcast categories. Must match frontend src/lib/categories.ts keys.
+ALLOWED_CATEGORIES = {
+    "internship",
+    "job",
+    "self_improvement",
+    "opportunities",
+    "education",
+    "scholarship",
+    "mentorship",
+    "networking",
+}
 
 
 class BroadcastBody(BaseModel):
@@ -136,6 +154,7 @@ class BroadcastBody(BaseModel):
     start_time: datetime
     end_time: datetime
     location: str | None = None
+    category: str = "opportunities"
     all_day: bool = False
     reminder_minutes: int = 10  # 0 disables; matches Google's "Bildirim X dakika önce"
     recurrence: str = "none"  # none | daily | weekly | monthly
@@ -154,6 +173,7 @@ class BroadcastEvent(BaseModel):
     start_time: datetime
     end_time: datetime
     location: str | None = None
+    category: str = "opportunities"
     all_day: bool = False
     reminder_minutes: int = 10
     recurrence: str = "none"
@@ -176,6 +196,7 @@ class UserEventSync(BaseModel):
     event_id: str
     title: str
     description: str
+    category: str = "opportunities"
     start_time: datetime
     end_time: datetime
     delivered_at: datetime
@@ -233,6 +254,7 @@ def to_public_user(doc: dict[str, Any]) -> PublicUser:
         name=doc.get("name") or doc["email"].split("@")[0],
         is_admin=bool(doc.get("is_admin")),
         google_connected=bool(doc.get("google_refresh_token")),
+        interests=list(doc.get("interests") or []),
         created_at=doc["created_at"],
     )
 
@@ -493,6 +515,25 @@ async def disconnect_google(user: dict[str, Any] = Depends(current_user)) -> dic
     return {"status": "disconnected"}
 
 
+@api.put("/auth/interests", response_model=PublicUser)
+async def set_interests(
+    body: InterestsBody, user: dict[str, Any] = Depends(current_user)
+) -> PublicUser:
+    """Set the current user's interest categories.
+
+    Accepts any of ALLOWED_CATEGORIES plus the special 'all' key (which
+    matches every broadcast). Empty list also means see-everything for
+    safety, so a misconfigured user never silently misses events.
+    """
+    allowed = ALLOWED_CATEGORIES | {"all"}
+    interests = [k for k in dict.fromkeys(body.interests) if k in allowed]
+    await users_col.update_one(
+        {"id": user["id"]}, {"$set": {"interests": interests, "updated_at": datetime.now(timezone.utc)}}
+    )
+    doc = await users_col.find_one({"id": user["id"]}, {"_id": 0})
+    return to_public_user(doc)
+
+
 # ---------------------------------------------------------------------------
 # Routes — Push
 # ---------------------------------------------------------------------------
@@ -543,6 +584,7 @@ async def my_synced_events(user: dict[str, Any] = Depends(current_user)) -> list
                 event_id=r["event_id"],
                 title=r["title"],
                 description=r.get("description", ""),
+                category=r.get("category", "opportunities"),
                 start_time=r["start_time"],
                 end_time=r["end_time"],
                 delivered_at=r["delivered_at"],
@@ -573,6 +615,7 @@ async def _inject_event_for_user(
         "event_id": event_id,
         "title": body.title,
         "description": body.description,
+        "category": body.category,
         "start_time": body.start_time,
         "end_time": body.end_time,
         "delivered_at": now,
@@ -604,6 +647,11 @@ async def admin_broadcast(
 ) -> BroadcastEvent:
     if body.end_time <= body.start_time:
         raise HTTPException(400, "end_time must be after start_time")
+    if body.category not in ALLOWED_CATEGORIES:
+        raise HTTPException(
+            400,
+            f"category must be one of {sorted(ALLOWED_CATEGORIES)}",
+        )
     event_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
 
@@ -621,10 +669,17 @@ async def admin_broadcast(
             logger.warning("admin calendar insert failed: %s", e)
             admin_status = "failed"
 
-    # 2. Fan out to all users (excluding the admin we already wrote to)
-    targets = await users_col.find(
+    # 2. Fan out only to users whose interests include this category
+    #    (or who picked 'all' / haven't set interests yet).
+    all_targets = await users_col.find(
         {"id": {"$ne": admin["id"]}}, {"_id": 0}
     ).to_list(10_000)
+    targets = [
+        u for u in all_targets
+        if not u.get("interests")
+        or "all" in (u.get("interests") or [])
+        or body.category in (u.get("interests") or [])
+    ]
     results = await asyncio.gather(
         *[_inject_event_for_user(admin, t, body, event_id) for t in targets]
     )
@@ -639,6 +694,7 @@ async def admin_broadcast(
             "event_id": event_id,
             "title": body.title,
             "description": body.description,
+            "category": body.category,
             "start_time": body.start_time,
             "end_time": body.end_time,
             "delivered_at": now,
@@ -653,6 +709,7 @@ async def admin_broadcast(
         "start_time": body.start_time,
         "end_time": body.end_time,
         "location": body.location,
+        "category": body.category,
         "all_day": body.all_day,
         "reminder_minutes": body.reminder_minutes,
         "recurrence": body.recurrence,

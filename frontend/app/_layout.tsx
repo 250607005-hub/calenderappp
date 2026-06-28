@@ -41,9 +41,16 @@ function AuthGate() {
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === 'sign-in';
-    if (!user && !inAuthGroup) {
-      router.replace('/sign-in');
-    } else if (user && inAuthGroup) {
+    const inOnboarding = segments[0] === 'onboarding-interests';
+    if (!user) {
+      if (!inAuthGroup) router.replace('/sign-in');
+      return;
+    }
+    // Regular users must pick at least one interest before entering the app.
+    const needsInterests = !user.is_admin && (!user.interests || user.interests.length === 0);
+    if (needsInterests && !inOnboarding) {
+      router.replace('/onboarding-interests');
+    } else if (!needsInterests && (inAuthGroup || inOnboarding)) {
       router.replace('/(tabs)');
     }
   }, [user, loading, segments, router]);
@@ -75,6 +82,7 @@ function AuthGate() {
   return (
     <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
       <Stack.Screen name="sign-in" />
+      <Stack.Screen name="onboarding-interests" />
       <Stack.Screen name="(tabs)" />
     </Stack>
   );

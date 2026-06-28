@@ -1,0 +1,66 @@
+{
+  "summary": "Backend interest + category-aware broadcast fan-out: 15/15 tests passing (incl. 6 new tests for /api/auth/interests and write-time category filtering). PublicUser exposes interests=[] for new users; AuthGate routes them to /onboarding-interests correctly. Onboarding flow (select interest -> continue -> (tabs)) verified end-to-end via Playwright. CRITICAL frontend bug: Calendar screen RED-SCREENS with ReferenceError: filter is not defined at app/(tabs)/calendar.tsx:125 -- the `filter` state/setter was never declared via useState. This blocks ALL calendar usage and was reproduced for both admin and regular users.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/(tabs)/calendar.tsx",
+        "issue": "RED SCREEN: 'ReferenceError: filter is not defined' at line 125. CalendarScreen uses `filter` and passes `setFilter` to <FilterChips/>, but never declares them via useState. Add: const [filter, setFilter] = useState<CategoryKey | 'all'>('all');",
+        "testID": "calendar-screen",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "app/(tabs)/admin.tsx",
+        "issue": "TypeScript: `sheet` state union (lines 110-120) is missing the 'category' literal even though setSheet('category') is called and <SelectSheet visible={sheet === 'category'} /> is rendered. Runtime works (TS stripped by Metro), but tsc/strict checks will flag. Add 'category' to the union.",
+        "testID": "admin-category-row",
+        "priority": "MINOR"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Calendar event display + filter chips",
+        "issue": "Cannot validate filter chip behavior or category-based filtered display because the screen crashes immediately on mount. Once the `filter` state is added, retest filter-chip-all and filter-chip-<key> selectors plus event visibility on the calendar.",
+        "affected_testIDs": ["calendar-screen", "filter-chip-all", "filter-chip-internship", "calendar-event-<id>"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "global",
+        "issue": "Console warnings: '\"shadow*\" style props are deprecated. Use \"boxShadow\"' and 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: app/sign-in.tsx (LinearGradient pointerEvents='none') and theme shadow helpers."
+      },
+      {
+        "component": "package versions",
+        "issue": "Expo CLI reports expected upgrades: expo@~54.0.35 (have 54.0.34), expo-font@~14.0.12, expo-router@~6.0.24. Non-blocking but flagged at every restart."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_interests_and_category.py",
+    "/app/backend/tests/test_calsync_api.py",
+    "/app/test_reports/pytest/iter2.xml"
+  ],
+  "action_items": [
+    "FIX (1-line): In /app/frontend/app/(tabs)/calendar.tsx add `const [filter, setFilter] = useState<CategoryKey | 'all'>('all');` near the other useState calls (top of CalendarScreen). Default to 'all' so 'Hepsi' chip is preselected.",
+    "FIX (types): In /app/frontend/app/(tabs)/admin.tsx add 'category' to the `sheet` state union type so strict TS compiles cleanly.",
+    "Replace deprecated 'shadow*' style props with `boxShadow` in src/theme (or any StyleSheet that emits shadow*).",
+    "Optionally align expo / expo-router / expo-font to the versions Expo SDK 54 expects."
+  ],
+  "critical_code_review_comments": [
+    "calendar.tsx: filter state is referenced but never created -- pure RCE that ships a red screen. Caught only by runtime mount; lint/tsc would have flagged with proper config.",
+    "Backend filter is correctly write-time (events not delivered to non-matching users), confirmed by category-aware fan-out test: A=internship -> 1 row, B=job -> 0 rows, C=all -> 1 row.",
+    "Onboarding routing in _layout.tsx is sound: admin bypasses (because is_admin true), regular user with empty interests routes to /onboarding-interests, after PUT /auth/interests + refresh() AuthGate re-evaluates and replaces to /(tabs)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_interests_and_category.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "50% (sign-in + onboarding work; calendar crashes; admin tab unreachable through tabs while calendar lazy-loads in tab nav)"},
+  "seed_data_creation": "Test users with TEST_ prefix (TEST_a_*, TEST_b_*, TEST_c_*, TEST_int_*, TEST_new_*, TEST_pu_*, TEST_disc_*, TEST_ui_new@calsync.app) created in MongoDB via /api/auth/google/mobile. Admin: admin@calsync.app.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "After E1 adds `const [filter, setFilter] = useState<CategoryKey | 'all'>('all');` to calendar.tsx, retest: (a) calendar-screen renders, (b) filter-chip-all selected by default, (c) tapping filter-chip-internship hides events whose category != internship and 'Hepsi' restores them, (d) admin admin-category-row opens a SelectSheet with 'Staj','İş arıyorum',... and selection updates the broadcast payload, (e) admin Year/Month/Week toggle still works. Backend tests in /app/backend/tests/ are stable -- rerun with `pytest /app/backend/tests/ -v`.",
+  "rca_of_issue": "calendar.tsx imports CategoryKey and uses `filter`/`setFilter` inside FilterChips + filteredEvents memo, but the useState declaration was omitted during refactor. Reproduction: open /(tabs) as any user, navigate to Calendar tab -> RedBox 'filter is not defined'. Mitigation: add the missing useState; until then the entire calendar tab is unusable and event details / week view cannot be exercised."
+}

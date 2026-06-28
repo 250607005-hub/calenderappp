@@ -22,11 +22,18 @@ import { FieldRow } from '@/src/components/FieldRow';
 import { SelectSheet, type SelectOption } from '@/src/components/SelectSheet';
 import { adminApi, type BroadcastEvent } from '@/src/lib/api';
 import { useAuth } from '@/src/lib/auth-context';
+import { CATEGORIES, type CategoryKey, categoryLabel } from '@/src/lib/categories';
 import { colors, radius, shadow, spacing, type } from '@/src/theme';
 
 type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly';
 type Visibility = 'default' | 'public' | 'private';
 type BusyStatus = 'busy' | 'free';
+
+const CATEGORY_OPTIONS: SelectOption<CategoryKey>[] = CATEGORIES.map((c) => ({
+  value: c.key,
+  label: c.label,
+  hint: c.description,
+}));
 
 const HOUR_OPTIONS: SelectOption<number>[] = Array.from({ length: 24 }, (_, h) => ({
   value: h,
@@ -89,6 +96,7 @@ export default function AdminDashboard() {
   const [pickerOpen, setPickerOpen] = useState<null | 'start' | 'end'>(null);
 
   // Extra options
+  const [category, setCategory] = useState<CategoryKey>('opportunities');
   const [reminder, setReminder] = useState(10);
   const [recurrence, setRecurrence] = useState<Recurrence>('none');
   const [visibility, setVisibility] = useState<Visibility>('default');
@@ -169,6 +177,7 @@ export default function AdminDashboard() {
         title: title.trim(),
         description: description.trim(),
         location: location.trim() || null,
+        category,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         all_day: allDay,
@@ -340,6 +349,17 @@ export default function AdminDashboard() {
           </View>
 
           {/* LOCATION */}
+          <Text style={styles.sectionLabel}>Kategori</Text>
+          <View style={styles.card}>
+            <FieldRow
+              icon="pricetag-outline"
+              label="Kategori"
+              value={categoryLabel(category)}
+              onPress={() => setSheet('category')}
+              testID="admin-category-row"
+            />
+          </View>
+
           <View style={styles.card}>
             <View style={[styles.row, { paddingVertical: spacing.md }]}>
               <View style={styles.iconLeft}>
@@ -536,6 +556,14 @@ export default function AdminDashboard() {
       </KeyboardAvoidingView>
 
       {/* Select sheets */}
+      <SelectSheet
+        visible={sheet === 'category'}
+        title="Kategori"
+        value={category}
+        options={CATEGORY_OPTIONS}
+        onSelect={(v) => setCategory(v)}
+        onClose={() => setSheet(null)}
+      />
       <SelectSheet
         visible={sheet === 'reminder'}
         title="Calendar reminder"

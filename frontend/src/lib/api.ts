@@ -91,6 +91,7 @@ export type PublicUser = {
   name: string;
   is_admin: boolean;
   google_connected: boolean;
+  interests: string[];
   created_at: string;
 };
 
@@ -99,6 +100,7 @@ export type UserEventSync = {
   event_id: string;
   title: string;
   description: string;
+  category: string;
   start_time: string;
   end_time: string;
   delivered_at: string;
@@ -114,6 +116,7 @@ export type BroadcastEvent = {
   start_time: string;
   end_time: string;
   location: string | null;
+  category: string;
   admin_id: string;
   admin_email: string;
   created_at: string;
@@ -138,6 +141,11 @@ export const auth = {
   me: () => api<PublicUser>('/api/auth/me'),
   disconnectGoogle: () =>
     api<{ status: string }>('/api/auth/disconnect-google', { method: 'POST' }),
+  setInterests: (interests: string[]) =>
+    api<PublicUser>('/api/auth/interests', {
+      method: 'PUT',
+      body: { interests },
+    }),
 };
 
 export const userApi = {
@@ -151,6 +159,7 @@ export const adminApi = {
     start_time: string;
     end_time: string;
     location?: string | null;
+    category?: string;
     all_day?: boolean;
     reminder_minutes?: number;
     recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';

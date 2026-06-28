@@ -37,6 +37,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { adminApi, userApi, type BroadcastEvent, type UserEventSync } from '@/src/lib/api';
 import { useAuth } from '@/src/lib/auth-context';
+import { CATEGORIES, categoryLabel, type CategoryKey } from '@/src/lib/categories';
 import { colors, radius, shadow, spacing, type } from '@/src/theme';
 
 type ViewMode = 'year' | 'month' | 'week';
@@ -45,6 +46,7 @@ type CalendarEvent = {
   id: string;
   title: string;
   description: string;
+  category: CategoryKey;
   start: Date;
   end: Date;
 };
@@ -68,6 +70,7 @@ export default function CalendarScreen() {
           id: b.id,
           title: b.title,
           description: b.description,
+          category: (b.category as CategoryKey) ?? 'opportunities',
           start: parseISO(b.start_time),
           end: parseISO(b.end_time),
         }));
@@ -77,6 +80,7 @@ export default function CalendarScreen() {
           id: b.id,
           title: b.title,
           description: b.description,
+          category: (b.category as CategoryKey) ?? 'opportunities',
           start: parseISO(b.start_time),
           end: parseISO(b.end_time),
         }));
@@ -116,6 +120,11 @@ export default function CalendarScreen() {
     return `${format(s, 'MMM d')} – ${format(e, 'MMM d, yyyy')}`;
   }, [cursor, mode]);
 
+  const filteredEvents = useMemo(
+    () => (filter === 'all' ? events : events.filter((e) => e.category === filter)),
+    [events, filter]
+  );
+
   return (
     <SafeAreaView style={styles.root} edges={['top']} testID="calendar-screen">
       {/* Header */}
@@ -141,10 +150,13 @@ export default function CalendarScreen() {
         </Pressable>
       </View>
 
+      {/* Filter chips — single horizontal scroller, sticky chrome */}
+      <FilterChips value={filter} onChange={setFilter} />
+
       {mode === 'year' && (
         <YearView
           cursor={cursor}
-          events={events}
+          events={filteredEvents}
           onPickMonth={(d) => {
             setCursor(d);
             setMode('month');
@@ -154,7 +166,7 @@ export default function CalendarScreen() {
       {mode === 'month' && (
         <MonthView
           cursor={cursor}
-          events={events}
+          events={filteredEvents}
           onPickDay={(d) => {
             setCursor(d);
             setMode('week');
@@ -164,7 +176,7 @@ export default function CalendarScreen() {
       {mode === 'week' && (
         <WeekView
           cursor={cursor}
-          events={events}
+          events={filteredEvents}
           onPickEvent={(e) => setSelectedEvent(e)}
           loading={loading}
         />
@@ -172,6 +184,65 @@ export default function CalendarScreen() {
 
       <EventDetailsModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
     </SafeAreaView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Filter chips — single horizontal scroller (P0: chrome, never wraps)
+// ---------------------------------------------------------------------------
+function FilterChips({
+  value,
+  onChange,
+}: {
+  value: CategoryKey | 'all';
+  onChange: (v: CategoryKey | 'all') => void;
+}) {
+  return (
+    <View style={styles.chipsWrap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsContent}
+      >
+        <ChipBtn
+          testID="filter-chip-all"
+          label="Hepsi"
+          active={value === 'all'}
+          onPress={() => onChange('all')}
+        />
+        {CATEGORIES.map((c) => (
+          <ChipBtn
+            key={c.key}
+            testID={`filter-chip-${c.key}`}
+            label={c.label}
+            active={value === c.key}
+            onPress={() => onChange(c.key)}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ChipBtn({
+  label,
+  active,
+  onPress,
+  testID,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -437,7 +508,7 @@ function WeekView({
                       {ev.title}
                     </Text>
                     <Text style={styles.eventTime} numberOfLines={1}>
-                      {format(ev.start, 'HH:mm')}
+                      {format(ev.start, 'HH:mm')} · {categoryLabel(ev.category)}
                     </Text>
                   </Pressable>
                 );
@@ -495,6 +566,10 @@ function EventDetailsModal({
               {event.description ? (
                 <Text style={styles.modalDesc}>{event.description}</Text>
               ) : null}
+              <View style={styles.catTag}>
+                <Ionicons name="pricetag" size={12} color={colors.onBrandTertiary} />
+                <Text style={styles.catTagText}>{categoryLabel(event.category)}</Text>
+              </View>
             </>
           )}
         </Pressable>
@@ -716,4 +791,47 @@ const styles = StyleSheet.create({
   modalRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
   modalMeta: { fontSize: type.sm, color: colors.muted },
   modalDesc: { fontSize: type.base, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 20 },
+  catTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.brandTertiary,
+    borderRadius: radius.pill,
+    marginTop: spacing.md,
+  },
+  catTagText: {
+    color: colors.onBrandTertiary,
+    fontSize: type.sm,
+    fontWeight: '500',
+  },
+  // Filter chips — 36pt chips, 56pt row, never wrap.
+  chipsWrap: {
+    height: 56,
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  chipsContent: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+  },
+  chip: {
+    height: 36,
+    flexShrink: 0,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: colors.brandSecondary,
+    borderColor: colors.brand,
+  },
+  chipText: { color: colors.muted, fontSize: type.sm, fontWeight: '500' },
+  chipTextActive: { color: colors.brand },
 });
